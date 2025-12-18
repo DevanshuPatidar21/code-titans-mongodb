@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam-Radar 2.0 🎯</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Modern Reset & Dark Theme */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* Header */
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #f1c40f, #e74c3c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 800;
+        }
+        p.subtitle { color: #a8a8b3; margin-bottom: 30px; font-size: 1.1rem; }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Inputs & Selects */
+        select, input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: 1px solid #444;
+            background: #1a1a2e; /* Dark Bg */
+            color: #fff; /* White Text */
+            font-size: 1rem;
+            outline: none;
+            transition: 0.3s;
+        }
+        select:focus, input:focus { border-color: #f1c40f; box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); }
+
+        /* Buttons */
+        button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+        }
+        .btn-predict {
+            background: linear-gradient(45deg, #f1c40f, #f39c12);
+            color: #1a1a2e;
+        }
+        .btn-add {
+            background: linear-gradient(45deg, #2ecc71, #27ae60);
+            color: white;
+        }
+        button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+
+        /* Alert Box */
+        .alert-box {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none; /* Hidden by default */
+            animation: slideIn 0.5s ease;
+            border: 2px solid #ff7675;
+        }
+        .alert-box strong { font-size: 1.2rem; display: block; margin-bottom: 5px; }
+
+        /* Chart Area */
+        .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
+
+        /* Admin Details */
+        details {
+            width: 100%;
+            max-width: 600px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 20px;
+            border: 1px solid #333;
+        }
+        summary { cursor: pointer; color: #aaa; font-weight: bold; padding: 10px; outline: none; }
+        summary:hover { color: #fff; }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 Exam-Radar</h1>
+    <p class="subtitle">AI-Powered Question Predictor</p>
+
+    <div class="glass-card">
+        <h3 style="margin-bottom: 15px; color: #f1c40f;">🔍 Select Your Subject</h3>
+        <select id="subjectSelect">
+            <option>Loading Subjects...</option>
+        </select>
+        <button class="btn-predict" onclick="analyzePattern()">🔮 Predict Question</button>
+    </div>
+
+    <div id="prediction" class="glass-card alert-box" style="display: none;">
+        🔥 <strong>HIGH PROBABILITY ALERT</strong>
+        Focus on Topic: "<span id="top-topic" style="text-decoration: underline;"></span>"<br>
+        <span style="font-size: 0.9rem; opacity: 0.9;">(Repeated <span id="count"></span> times in last 5 years)</span>
+    </div>
+
+    <div class="glass-card" id="chartCard" style="display:none;">
+        <div class="chart-container">
+            <canvas id="myChart"></canvas>
+        </div>
+    </div>
+
+    <details>
+        <summary>🔐 Admin Panel (Click to Add Data)</summary>
+        <div style="padding: 10px;">
+            <input id="in-sub" placeholder="Subject Name (e.g. C++)">
+            <input id="in-topic" placeholder="Topic (e.g. Pointers)">
+            <input id="in-year" type="number" placeholder="Year (e.g. 2023)">
+            <input id="in-marks" type="number" placeholder="Marks (e.g. 10)">
+            <button class="btn-add" onclick="addData()">➕ Add to Database</button>
+        </div>
+    </details>
+
+    <script>
+        const API = "http://127.0.0.1:5000";
+        let myChart;
+
+        // 1. Load Subjects on Start
+        async function loadSubjects() {
+            try {
+                const res = await fetch(API + "/subjects");
+                const data = await res.json();
+                const sel = document.getElementById("subjectSelect");
+                sel.innerHTML = "";
+                if(data.length === 0) sel.innerHTML = "<option>No Data Found (Add via Admin)</option>";
+                data.forEach(s => sel.innerHTML += `<option>${s}</option>`);
+            } catch(e) { console.log("Server not connected"); }
+        }
+
+        // 2. Add Data Function
+        async function addData() {
+            const sub = document.getElementById("in-sub").value;
+            const topic = document.getElementById("in-topic").value;
+            
+            if(!sub || !topic) { alert("Please fill Subject and Topic!"); return; }
+
+            await fetch(API + "/add", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subject: sub,
+                    topic: topic,
+                    year: document.getElementById("in-year").value || 2024,
+                    marks: document.getElementById("in-marks").value || 5
+                })
+            });
+            alert("✅ Data Saved Successfully!");
+            loadSubjects(); // Refresh list
+        }
+
+        // 3. Analyze & Predict
+        async function analyzePattern() {
+            const sub = document.getElementById("subjectSelect").value;
+            if(sub.includes("No Data")) { alert("Please add data first!"); return; }
+
+            const res = await fetch(API + `/analyze?subject=${sub}`);
+            const data = await res.json();
+
+            if(data.length > 0) {
+                // Show Alert
+                const predBox = document.getElementById("prediction");
+                predBox.style.display = "block";
+                document.getElementById("top-topic").innerText = data[0]._id;
+                document.getElementById("count").innerText = data[0].count;
+
+                // Show Chart
+                document.getElementById("chartCard").style.display = "block";
+                const ctx = document.getElementById('myChart').getContext('2d');
+                if(myChart) myChart.destroy();
+
+                myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(d => d._id),
+                        datasets: [{
+                            label: 'Question Frequency',
+                            data: data.map(d => d.count),
+                            backgroundColor: ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#9b59b6'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: 'white' } } },
+                        scales: {
+                            y: { ticks: { color: 'white' }, grid: { color: '#444' } },
+                            x: { ticks: { color: 'white' }, grid: { display: false } }
+                        }
+                    }
+                });
+            } else { alert("Not enough data to predict!"); }
+        }
+
+        // Start App
+        loadSubjects();
+    </script>
+</body>
+</html>
